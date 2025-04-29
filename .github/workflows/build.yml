@@ -20,10 +20,14 @@ jobs:
       -
         name: Set up Go
         uses: actions/setup-go@v5
-      - name: Install dependencies
+      -
+        name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc sqlite3 libsqlite3-dev
+          sudo apt-get install -y \
+            gcc \
+            sqlite3 libsqlite3-dev \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross
       -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -35,5 +39,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CC_FOR_TARGET_linux_arm64: aarch64-linux-gnu-gcc
           # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
           # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}

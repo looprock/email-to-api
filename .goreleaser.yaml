@@ -22,6 +22,9 @@ builds:
     goos:
       - linux
       - darwin
+    goarch:
+      - amd64
+      - arm64
     dir: .
     main: ./cmd/mailserver
     binary: mailserver
@@ -31,6 +34,9 @@ builds:
     goos:
       - linux
       - darwin
+    goarch:
+      - amd64
+      - arm64
     dir: .
     main: ./cmd/adminserver
     binary: adminserver
