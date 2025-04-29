@@ -18,13 +18,12 @@ before:
 builds:
   - id: mailserver
     env:
-      - CGO_ENABLED=0  # Default to CGO disabled
+      - CGO_ENABLED=1
+      - CC=gcc
     goos:
       - linux
-      - darwin
     goarch:
       - amd64
-      - arm64
     dir: .
     main: ./cmd/mailserver
     binary: mailserver
@@ -32,27 +31,14 @@ builds:
       - -s -w
     flags:
       - -trimpath
-    overrides:
-      - goos: linux
-        goarch: amd64
-        env:
-          - CGO_ENABLED=1
-          - CC=gcc
-      - goos: linux
-        goarch: arm64
-        env:
-          - CGO_ENABLED=1
-          - CC=aarch64-linux-gnu-gcc
-          - CXX=aarch64-linux-gnu-g++
   - id: adminserver
     env:
-      - CGO_ENABLED=0  # Default to CGO disabled
+      - CGO_ENABLED=1
+      - CC=gcc
     goos:
       - linux
-      - darwin
     goarch:
       - amd64
-      - arm64
     dir: .
     main: ./cmd/adminserver
     binary: adminserver
@@ -60,18 +46,6 @@ builds:
       - -s -w
     flags:
       - -trimpath
-    overrides:
-      - goos: linux
-        goarch: amd64
-        env:
-          - CGO_ENABLED=1
-          - CC=gcc
-      - goos: linux
-        goarch: arm64
-        env:
-          - CGO_ENABLED=1
-          - CC=aarch64-linux-gnu-gcc
-          - CXX=aarch64-linux-gnu-g++
 
 archives:
   - id: mailserver
