@@ -28,6 +28,16 @@ builds:
     dir: .
     main: ./cmd/mailserver
     binary: mailserver
+    ldflags:
+      - -s -w
+    flags:
+      - -trimpath
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=aarch64-linux-gnu-gcc
+          - CXX=aarch64-linux-gnu-g++
   - id: adminserver
     env:
       - CGO_ENABLED=1
@@ -40,6 +50,16 @@ builds:
     dir: .
     main: ./cmd/adminserver
     binary: adminserver
+    ldflags:
+      - -s -w
+    flags:
+      - -trimpath
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=aarch64-linux-gnu-gcc
+          - CXX=aarch64-linux-gnu-g++
 
 archives:
   - id: mailserver

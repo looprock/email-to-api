@@ -27,7 +27,9 @@ jobs:
           sudo apt-get install -y \
             gcc \
             sqlite3 libsqlite3-dev \
-            gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
+            libc6-dev-arm64-cross
       -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -39,6 +41,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CC_FOR_TARGET_linux_arm64: aarch64-linux-gnu-gcc
+          CC_linux_arm64: aarch64-linux-gnu-gcc
+          CXX_linux_arm64: aarch64-linux-gnu-g++
+          AS_linux_arm64: aarch64-linux-gnu-as
+          PKG_CONFIG_PATH_linux_arm64: /usr/lib/aarch64-linux-gnu/pkgconfig
           # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
           # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
