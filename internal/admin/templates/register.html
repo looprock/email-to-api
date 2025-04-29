@@ -1,0 +1,30 @@
+{{define "register.html"}}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Complete Registration</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        body { padding: 2rem; }
+        .container { max-width: 400px; margin: 0 auto; }
+        .error { color: red; margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>Complete Registration</h1>
+        {{if .Error}}
+        <div class="error">{{.Error}}</div>
+        {{end}}
+        <form method="POST">
+            <input type="hidden" name="token" value="{{.Token}}">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+            <label for="confirm_password">Confirm Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" required>
+            <button type="submit">Set Password</button>
+        </form>
+    </main>
+</body>
+</html>
+{{end}} 

@@ -1,0 +1,49 @@
+{{define "layout.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Processor Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body class="bg-gray-100">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between">
+                <div class="flex space-x-7">
+                    <div class="flex items-center py-4">
+                        <span class="font-semibold text-gray-500 text-lg">Email Processor Admin</span>
+                    </div>
+                    <div class="hidden md:flex items-center space-x-1">
+                        <a href="/" class="py-4 px-2 text-gray-500 hover:text-gray-900 {{if eq .CurrentPage "mappings"}}text-blue-500{{end}}">Mappings</a>
+                        <a href="/logs" class="py-4 px-2 text-gray-500 hover:text-gray-900 {{if eq .CurrentPage "logs"}}text-blue-500{{end}}">Logs</a>
+                        {{if eq .UserRole "admin"}}
+                        <a href="/users" class="py-4 px-2 text-gray-500 hover:text-gray-900 {{if eq .CurrentPage "users"}}text-blue-500{{end}}">Users</a>
+                        {{end}}
+                        <a href="/change-password" class="py-4 px-2 text-gray-500 hover:text-gray-900 {{if eq .CurrentPage "change_password"}}text-blue-500{{end}}">Change My Password</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span class="text-gray-500">{{.UserEmail}}</span>
+                    <a href="/logout" class="py-2 px-3 text-red-500 hover:text-red-700">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-8">
+        {{if eq .CurrentPage "mappings"}}
+            {{template "mappings" .}}
+        {{else if eq .CurrentPage "logs"}}
+            {{template "logs" .}}
+        {{else if eq .CurrentPage "users"}}
+            {{template "users" .}}
+        {{else if eq .CurrentPage "change_password"}}
+            {{template "content" .}}
+        {{end}}
+    </div>
+</body>
+</html>
+{{end}} 

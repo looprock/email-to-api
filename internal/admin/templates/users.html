@@ -1,0 +1,94 @@
+{{define "users"}}
+<div class="max-w-6xl mx-auto">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold mb-4">Users</h1>
+        
+        {{if .Error}}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {{.Error}}
+        </div>
+        {{end}}
+        
+        {{if .Success}}
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+            {{.Success}}
+        </div>
+        {{end}}
+
+        <!-- Create User Form -->
+        <form method="POST" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="email">
+                    Email
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    id="email" type="email" name="email" required>
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="role">
+                    Role
+                </label>
+                <select class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    id="role" name="role" required>
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="flex items-center justify-between">
+                <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                    type="submit">
+                    Create User
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Users Table -->
+    <div class="bg-white shadow-md rounded my-6">
+        <table class="min-w-full table-auto">
+            <thead>
+                <tr class="bg-gray-200 text-gray-600 uppercase text-sm leading-normal">
+                    <th class="py-3 px-6 text-left">Email</th>
+                    <th class="py-3 px-6 text-left">Role</th>
+                    <th class="py-3 px-6 text-left">Status</th>
+                    <th class="py-3 px-6 text-left">Created</th>
+                    <th class="py-3 px-6 text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="text-gray-600 text-sm font-light">
+                {{range .Users}}
+                <tr class="border-b border-gray-200 hover:bg-gray-100">
+                    <td class="py-3 px-6 text-left">{{.Email}}</td>
+                    <td class="py-3 px-6 text-left">
+                        <form method="POST" action="/users/role" class="inline">
+                            <input type="hidden" name="user_id" value="{{.ID}}">
+                            <select name="role" class="border rounded px-2 py-1 text-sm" 
+                                onchange="this.form.submit()">
+                                <option value="user" {{if eq .Role "user"}}selected{{end}}>User</option>
+                                <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td class="py-3 px-6 text-left">
+                        <form method="POST" action="/users/toggle" class="inline">
+                            <input type="hidden" name="user_id" value="{{.ID}}">
+                            <button type="submit" 
+                                class="{{if .IsActive}}text-green-600 hover:text-green-800{{else}}text-red-600 hover:text-red-800{{end}}">
+                                {{if .IsActive}}Active{{else}}Inactive{{end}}
+                            </button>
+                        </form>
+                    </td>
+                    <td class="py-3 px-6 text-left">{{.CreatedAt.Format "2006-01-02"}}</td>
+                    <td class="py-3 px-6 text-center">
+                        <a href="/change-password?user_id={{.ID}}"
+                            class="text-blue-600 hover:text-blue-900 mr-4">
+                            Change Password
+                        </a>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}} 

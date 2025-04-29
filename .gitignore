@@ -23,3 +23,12 @@ go.work.sum
 
 # env file
 .env
+
+data/*
+mailreader.db
+email.db
+.cursor
+.cursor/*
+example-api/data/*
+# Added by goreleaser init:
+dist/
