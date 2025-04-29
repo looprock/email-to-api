@@ -1,11 +1,13 @@
 package email
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/emersion/go-smtp"
@@ -269,7 +271,32 @@ func StartSMTPServer(processor *Processor, host string, port int) error {
 	be := NewBackend(processor)
 	s := smtp.NewServer(be)
 
-	s.Addr = fmt.Sprintf("%s:%d", host, port)
+	// Force dual-stack (IPv4 + IPv6) by setting specific listener options
+	addr := fmt.Sprintf("%s:%d", host, port)
+	config := &net.ListenConfig{
+		Control: func(network, address string, c syscall.RawConn) error {
+			var opErr error
+			if err := c.Control(func(fd uintptr) {
+				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+				if opErr != nil {
+					return
+				}
+				// Force dual-stack
+				opErr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_V6ONLY, 0)
+			}); err != nil {
+				return err
+			}
+			return opErr
+		},
+	}
+
+	// Create a TCP listener with dual-stack support
+	listener, err := config.Listen(context.Background(), "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to create listener: %w", err)
+	}
+
+	s.Addr = addr
 	s.Domain = host
 	s.ReadTimeout = 30 * time.Second  // Increased timeout
 	s.WriteTimeout = 30 * time.Second // Increased timeout
@@ -286,12 +313,6 @@ func StartSMTPServer(processor *Processor, host string, port int) error {
 	log.Printf("- Max Message Size: %d bytes", s.MaxMessageBytes)
 	log.Printf("- Max Recipients: %d", s.MaxRecipients)
 	log.Printf("- Allow Insecure Auth: %v", s.AllowInsecureAuth)
-
-	// Create a TCP listener with logging
-	listener, err := net.Listen("tcp", s.Addr)
-	if err != nil {
-		return fmt.Errorf("failed to create listener: %w", err)
-	}
 
 	// Wrap the listener with logging
 	loggingListener := &loggingListener{Listener: listener}
