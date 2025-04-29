@@ -69,7 +69,7 @@ builds:
 
 archives:
   - id: mailserver
-    # builds: [mailserver]
+    builds: [mailserver]
     name_template: >-
       {{ .ProjectName }}_mailserver_
       {{- title .Os }}_
@@ -77,11 +77,11 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    formats: ['tar.gz']
+    format: tar.gz
     files:
       - none*
   - id: adminserver
-    # builds: [adminserver]
+    builds: [adminserver]
     name_template: >-
       {{ .ProjectName }}_adminserver_
       {{- title .Os }}_
@@ -89,7 +89,7 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    formats: ['tar.gz']
+    format: tar.gz
     files:
       - none*
 
