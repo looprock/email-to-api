@@ -1,0 +1,114 @@
+# This is an example .goreleaser.yml file with some sensible defaults.
+# Make sure to check the documentation at https://goreleaser.com
+
+# The lines below are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/need to use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+    # you may remove this if you don't need go generate
+    - go generate ./...
+
+builds:
+  - id: mailserver
+    env:
+      - CGO_ENABLED=0  # Default to CGO disabled
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    dir: .
+    main: ./cmd/mailserver
+    binary: mailserver
+    ldflags:
+      - -s -w
+    flags:
+      - -trimpath
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - CC=gcc
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CC=aarch64-linux-gnu-gcc
+          - CXX=aarch64-linux-gnu-g++
+  - id: adminserver
+    env:
+      - CGO_ENABLED=0  # Default to CGO disabled
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    dir: .
+    main: ./cmd/adminserver
+    binary: adminserver
+    ldflags:
+      - -s -w
+    flags:
+      - -trimpath
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - CC=gcc
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CC=aarch64-linux-gnu-gcc
+          - CXX=aarch64-linux-gnu-g++
+
+archives:
+  - id: mailserver
+    # builds: [mailserver]
+    name_template: >-
+      {{ .ProjectName }}_mailserver_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    formats: ['tar.gz']
+    files:
+      - none*
+  - id: adminserver
+    # builds: [adminserver]
+    name_template: >-
+      {{ .ProjectName }}_adminserver_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    formats: ['tar.gz']
+    files:
+      - none*
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  footer: >-
+
+    ---
+
+    Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
