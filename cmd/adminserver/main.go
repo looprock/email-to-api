@@ -46,7 +46,7 @@ func main() {
 	defer db.Close()
 
 	// Start admin interface
-	adminServer, err := admin.New(db)
+	adminServer, err := admin.New(db, cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize admin server: %v", err)
 	}

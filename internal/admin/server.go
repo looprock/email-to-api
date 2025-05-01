@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/looprock/email-to-api/internal/config"
 	"github.com/looprock/email-to-api/internal/database"
 	"github.com/looprock/email-to-api/internal/email"
 
@@ -104,7 +105,7 @@ type PasswordData struct {
 }
 
 // New creates a new admin server
-func New(db *database.DB) (*Server, error) {
+func New(db *database.DB, cfg *config.Config) (*Server, error) {
 	// Parse both templates with a base template
 	tmpl := template.New("").Funcs(template.FuncMap{
 		"eq": func(a, b string) bool { return a == b },
@@ -115,7 +116,7 @@ func New(db *database.DB) (*Server, error) {
 		return nil, err
 	}
 
-	emailer, err := email.NewMailgunSender()
+	emailer, err := email.NewMailgunSender(cfg.Mailgun.SiteDomain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create email sender: %w", err)
 	}

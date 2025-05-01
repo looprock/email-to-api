@@ -45,11 +45,7 @@ type Config struct {
 		APIKey      string
 		Domain      string
 		FromAddress string
-	}
-
-	// Site Configuration
-	Site struct {
-		Domain string
+		SiteDomain  string
 	}
 }
 
@@ -114,6 +110,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("mailserver.retrydelay", 5)
 	v.SetDefault("mailserver.smtphost", "0.0.0.0")
 	v.SetDefault("mailserver.smtpport", 2525)
+
+	// Mailgun defaults
+	v.SetDefault("mailgun.site_domain", "")
 }
 
 // mapLegacyEnvVars maps old environment variable names to new configuration paths
@@ -176,5 +175,8 @@ func mapLegacyEnvVars(v *viper.Viper) {
 	}
 	if val := v.GetString("MAILGUN_FROM_ADDRESS"); val != "" {
 		v.Set("mailgun.fromaddress", val)
+	}
+	if val := v.GetString("MAILGUN_SITE_DOMAIN"); val != "" {
+		v.Set("mailgun.site_domain", val)
 	}
 }

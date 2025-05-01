@@ -20,7 +20,7 @@ type Sender struct {
 }
 
 // NewMailgunSender creates a new Mailgun email sender
-func NewMailgunSender() (*Sender, error) {
+func NewMailgunSender(siteDomain string) (*Sender, error) {
 	apiKey := os.Getenv("MAILGUN_API_KEY")
 	if apiKey == "" {
 		return nil, nil // Mailgun not configured, return nil without error
@@ -31,9 +31,8 @@ func NewMailgunSender() (*Sender, error) {
 		return nil, fmt.Errorf("MAILGUN_DOMAIN environment variable is required when MAILGUN_API_KEY is set")
 	}
 
-	siteDomain := os.Getenv("SITE_DOMAIN")
 	if siteDomain == "" {
-		return nil, fmt.Errorf("SITE_DOMAIN environment variable is required when MAILGUN_API_KEY is set")
+		return nil, fmt.Errorf("MAILGUN_SITE_DOMAIN environment variable or mailgun.site_domain config is required when MAILGUN_API_KEY is set")
 	}
 
 	fromAddress := os.Getenv("MAILGUN_FROM_ADDRESS")

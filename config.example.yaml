@@ -1,8 +1,8 @@
 # Database Configuration
 database:
-  driver: sqlite  # sqlite or postgres
+  driver: postgres  # sqlite or postgres
   # SQLite configuration
-  path: ./data/emailtoapi.db
+  # path: ./data/emailtoapi.db
   # PostgreSQL configuration (when driver is postgres)
   host: localhost
   port: 5432
@@ -18,22 +18,17 @@ adminserver:
 
 # Mail Server Configuration
 mailserver:
-  host: 0.0.0.0
-  port: 25
   domain: example.com  # Domain for generated email addresses
   receivemethod: smtp  # smtp or webhook
   maxemailsize: 10485760  # 10MB in bytes
   maxretries: 10
   retrydelay: 5
   smtphost: 0.0.0.0
-  smtpport: 2525
+  smtpport: 25
 
 # Mailgun Configuration (optional)
 mailgun:
   apikey: ""
   domain: ""
   fromaddress: ""
-
-# Site Configuration
-site:
-  domain: example.com 
+  site_domain: example.com # Domain for registration link if mailgun is used
