@@ -171,9 +171,8 @@ func (p *Processor) Process(email Email) error {
 			email.Subject,
 			"dropped",
 			fmt.Sprintf("email size %d bytes exceeds maximum allowed size of %d bytes", len(email.Body), p.config.MaxSize),
-			"",
 			nil,
-			1, // default user ID
+			uint(1), // default user ID
 		); err != nil {
 			log.Printf("Failed to log dropped email: %v", err)
 		}
@@ -203,9 +202,8 @@ func (p *Processor) processAsync(email Email) error {
 			email.Subject,
 			"error",
 			fmt.Sprintf("failed to get email mapping: %v", err),
-			"",
 			nil,
-			1, // Use default user ID only for logging errors when we can't find the mapping
+			uint(1), // Use default user ID only for logging errors when we can't find the mapping
 		); logErr != nil {
 			log.Printf("Failed to log error: %v", logErr)
 		}
@@ -220,9 +218,8 @@ func (p *Processor) processAsync(email Email) error {
 			email.Subject,
 			"dropped",
 			"no mapping found",
-			"",
 			nil,
-			1, // Use default user ID only for logging errors when we can't find the mapping
+			uint(1), // Use default user ID only for logging errors when we can't find the mapping
 		); err != nil {
 			log.Printf("Failed to log dropped email: %v", err)
 		}
@@ -238,7 +235,6 @@ func (p *Processor) processAsync(email Email) error {
 			email.Subject,
 			"dropped",
 			"mapping is inactive",
-			mapping.EndpointURL,
 			mapping.Headers,
 			mapping.UserID,
 		); err != nil {
@@ -321,7 +317,6 @@ func (p *Processor) processAsync(email Email) error {
 			email.Subject,
 			"success",
 			"",
-			mapping.EndpointURL,
 			mapping.Headers,
 			mapping.UserID, // Use the mapping's UserID for logging
 		); err != nil {
@@ -339,7 +334,6 @@ func (p *Processor) processAsync(email Email) error {
 		email.Subject,
 		"error",
 		lastErr.Error(),
-		mapping.EndpointURL,
 		mapping.Headers,
 		mapping.UserID, // Use the mapping's UserID for logging
 	); err != nil {

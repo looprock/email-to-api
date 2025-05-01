@@ -51,13 +51,16 @@ func TestProcessor_Process(t *testing.T) {
 	defer ts.Close()
 
 	// Create a test database
-	db, err := database.New(":memory:", "example.com")
+	db, err := database.New(&database.Config{
+		Driver: "sqlite",
+		DSN:    ":memory:",
+	})
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
 
 	// Create test tables
-	_, err = db.Exec(`
+	err = db.DB.Exec(`
 		CREATE TABLE email_mappings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL,
@@ -80,7 +83,7 @@ func TestProcessor_Process(t *testing.T) {
 			error_message TEXT,
 			headers TEXT
 		);
-	`)
+	`).Error
 	if err != nil {
 		t.Fatalf("Failed to create test tables: %v", err)
 	}

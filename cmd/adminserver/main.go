@@ -19,7 +19,7 @@ func main() {
 	defer stop()
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
@@ -27,7 +27,19 @@ func main() {
 	log.Printf("[INFO] Admin server using database: %s", cfg.Database.Path)
 
 	// Initialize database
-	db, err := database.New(cfg.Database.Path, cfg.Database.Domain)
+	dbConfig := &database.Config{
+		Driver:     cfg.Database.Driver,
+		DSN:        cfg.Database.Path, // For SQLite
+		MigrateURL: "file://migrations",
+		Domain:     cfg.MailServer.Domain,
+	}
+	if cfg.Database.Driver == "postgres" {
+		dbConfig.DSN = fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s",
+			cfg.Database.Host, cfg.Database.Port, cfg.Database.User,
+			cfg.Database.Name, cfg.Database.Password, cfg.Database.SSLMode)
+	}
+
+	db, err := database.New(dbConfig)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -40,13 +52,13 @@ func main() {
 	}
 
 	go func() {
-		adminAddr := fmt.Sprintf("%s:%d", cfg.Server.Admin.Host, cfg.Server.Admin.Port)
+		adminAddr := fmt.Sprintf("%s:%d", cfg.AdminServer.Host, cfg.AdminServer.Port)
 		if err := adminServer.Start(adminAddr); err != nil {
 			log.Printf("Admin server error: %v", err)
 			stop()
 		}
 	}()
-	log.Printf("Started admin server on %s:%d", cfg.Server.Admin.Host, cfg.Server.Admin.Port)
+	log.Printf("Started admin server on %s:%d", cfg.AdminServer.Host, cfg.AdminServer.Port)
 
 	// Keep the application running until we receive an interrupt signal
 	<-ctx.Done()

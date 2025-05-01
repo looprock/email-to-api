@@ -1,9 +1,7 @@
 package admin
 
 import (
-	"database/sql"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -59,16 +57,21 @@ type LogData struct {
 
 // LogEntry represents a log entry with formatted time
 type LogEntry struct {
-	ID             int64
-	EmailAddress   string
-	Subject        string
-	ProcessedAt    string
-	Status         string
-	ErrorMessage   string
-	APIEndpoint    string
-	GeneratedEmail string
-	Headers        map[string]string
-	UserEmail      string
+	ID             int64     `gorm:"column:id"`
+	EmailAddress   string    `gorm:"column:from_address"`
+	Subject        string    `gorm:"column:subject"`
+	ProcessedAt    time.Time `gorm:"column:processed_at"`
+	Status         string    `gorm:"column:status"`
+	ErrorMessage   string    `gorm:"column:error_message"`
+	APIEndpoint    string    `gorm:"column:endpoint_url"`
+	GeneratedEmail string    `gorm:"column:generated_email"`
+	Headers        string    `gorm:"column:headers"`
+	UserEmail      string    `gorm:"column:user_email"`
+}
+
+// TableName specifies the table name for GORM
+func (LogEntry) TableName() string {
+	return "email_logs"
 }
 
 // UsersData represents the data for users page
@@ -79,6 +82,7 @@ type UsersData struct {
 	CurrentPage string
 	UserRole    string
 	UserEmail   string
+	Token       string
 }
 
 // RegistrationData represents the data for registration page
@@ -92,7 +96,7 @@ type RegistrationData struct {
 type PasswordData struct {
 	Error       string
 	Success     string
-	UserID      int64
+	UserID      uint
 	UserRole    string
 	IsAdmin     bool
 	CurrentPage string
@@ -116,12 +120,19 @@ func New(db *database.DB) (*Server, error) {
 		return nil, fmt.Errorf("failed to create email sender: %w", err)
 	}
 
-	return &Server{
+	// Note: emailer can be nil if Mailgun is not configured
+	server := &Server{
 		db:       db,
 		tmpl:     tmpl,
 		sessions: NewSessionManager(),
 		emailer:  emailer,
-	}, nil
+	}
+
+	if emailer == nil {
+		log.Println("Warning: Email sending is not configured. Users will need to be configured manually.")
+	}
+
+	return server, nil
 }
 
 // Start starts the admin server
@@ -163,76 +174,28 @@ func (s *Server) handleMappings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context
-	userID := r.Context().Value(userIDKey).(int64)
+	userID := r.Context().Value(userIDKey).(uint)
 	userRole := r.Context().Value(userRoleKey).(string)
 
-	var query string
-	var args []interface{}
+	var mappings []database.EmailMapping
+	query := s.db.DB.Preload("User") // Preload the User relationship
 
-	if userRole == "admin" {
-		// Admin sees all mappings
-		query = `
-			SELECT m.id, m.generated_email, m.endpoint_url, m.headers, m.is_active, m.created_at, m.updated_at,
-			       u.email as user_email
-			FROM email_mappings m
-			JOIN users u ON m.user_id = u.id
-			ORDER BY m.created_at DESC
-		`
-	} else {
+	if userRole != "admin" {
 		// Regular users only see their own mappings
-		query = `
-			SELECT m.id, m.generated_email, m.endpoint_url, m.headers, m.is_active, m.created_at, m.updated_at,
-			       u.email as user_email
-			FROM email_mappings m
-			JOIN users u ON m.user_id = u.id
-			WHERE m.user_id = ?
-			ORDER BY m.created_at DESC
-		`
-		args = append(args, userID)
+		query = query.Where("user_id = ?", userID)
 	}
 
-	// log.Printf("Fetching mappings with query: %s (user_id=%d, role=%s)", query, userID, userRole)
+	// Get mappings with user information
+	err := query.Order("created_at DESC").Find(&mappings).Error
 
-	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		log.Printf("Database error fetching mappings: %v", err)
 		data.Error = fmt.Sprintf("Failed to fetch mappings: %v", err)
 		s.tmpl.ExecuteTemplate(w, "layout.html", data)
 		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var mapping database.EmailMapping
-		var headersJSON string
-		if err := rows.Scan(
-			&mapping.ID,
-			&mapping.GeneratedEmail,
-			&mapping.EndpointURL,
-			&headersJSON,
-			&mapping.IsActive,
-			&mapping.CreatedAt,
-			&mapping.UpdatedAt,
-			&mapping.UserEmail,
-		); err != nil {
-			log.Printf("Error scanning mapping row: %v", err)
-			data.Error = fmt.Sprintf("Failed to read mapping: %v", err)
-			continue
-		}
-		mapping.Headers = make(map[string]string)
-		if err := json.Unmarshal([]byte(headersJSON), &mapping.Headers); err != nil {
-			log.Printf("Error parsing headers JSON: %v", err)
-			data.Error = fmt.Sprintf("Failed to parse headers: %v", err)
-			continue
-		}
-		data.Mappings = append(data.Mappings, mapping)
-	}
-
-	if err = rows.Err(); err != nil {
-		log.Printf("Error after scanning rows: %v", err)
-		data.Error = fmt.Sprintf("Error reading mappings: %v", err)
-	}
-
+	data.Mappings = mappings
 	s.tmpl.ExecuteTemplate(w, "layout.html", data)
 }
 
@@ -245,122 +208,35 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context
-	userID := r.Context().Value(userIDKey).(int64)
+	userID := r.Context().Value(userIDKey).(uint)
 	userRole := r.Context().Value(userRoleKey).(string)
 
-	// Build query based on user role
-	var query string
-	var args []interface{}
+	var logs []LogEntry
+	query := s.db.DB.
+		Table("email_logs l").
+		Select(`l.id, l.from_address, l.subject, l.processed_at, l.status, l.error_message, 
+			l.headers, m.endpoint_url, m.generated_email, u.email as user_email`).
+		Joins("LEFT JOIN email_mappings m ON l.mapping_id = m.id").
+		Joins("LEFT JOIN users u ON m.user_id = u.id")
 
-	if userRole == "admin" {
-		// Admin sees all logs
-		query = `
-			SELECT 
-				l.id, 
-				l.from_address, 
-				l.subject, 
-				l.processed_at, 
-				l.status, 
-				l.error_message, 
-				l.headers,
-				m.endpoint_url,
-				m.generated_email,
-				u.email as user_email
-			FROM email_logs l
-			LEFT JOIN email_mappings m ON l.mapping_id = m.id
-			LEFT JOIN users u ON m.user_id = u.id
-			ORDER BY l.processed_at DESC 
-			LIMIT 100
-		`
-	} else {
+	if userRole != "admin" {
 		// Regular users only see their own logs
-		query = `
-			SELECT 
-				l.id, 
-				l.from_address, 
-				l.subject, 
-				l.processed_at, 
-				l.status, 
-				l.error_message, 
-				l.headers,
-				m.endpoint_url,
-				m.generated_email,
-				u.email as user_email
-			FROM email_logs l
-			LEFT JOIN email_mappings m ON l.mapping_id = m.id
-			LEFT JOIN users u ON m.user_id = u.id
-			WHERE m.user_id = ?
-			ORDER BY l.processed_at DESC 
-			LIMIT 100
-		`
-		args = append(args, userID)
+		query = query.Where("m.user_id = ?", userID)
 	}
 
-	// log.Printf("Fetching logs with query: %s (user_id=%d, role=%s)", query, userID, userRole)
+	err := query.
+		Order("l.processed_at DESC").
+		Limit(100).
+		Find(&logs).Error
 
-	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		log.Printf("Failed to fetch logs: %v", err)
 		data.Error = "Failed to fetch logs"
 		s.tmpl.ExecuteTemplate(w, "layout.html", data)
 		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var logEntry LogEntry
-		var processedAt time.Time
-		var headersJSON string
-		var endpointURL, generatedEmail, userEmail sql.NullString
-		if err := rows.Scan(
-			&logEntry.ID,
-			&logEntry.EmailAddress,
-			&logEntry.Subject,
-			&processedAt,
-			&logEntry.Status,
-			&logEntry.ErrorMessage,
-			&headersJSON,
-			&endpointURL,
-			&generatedEmail,
-			&userEmail,
-		); err != nil {
-			log.Printf("Failed to scan log entry: %v", err)
-			data.Error = "Failed to read log"
-			continue
-		}
-		logEntry.ProcessedAt = processedAt.Format("2006-01-02 15:04:05")
-
-		// Handle nullable fields
-		if endpointURL.Valid {
-			logEntry.APIEndpoint = endpointURL.String
-		}
-		if generatedEmail.Valid {
-			logEntry.GeneratedEmail = generatedEmail.String
-		}
-		if userEmail.Valid {
-			logEntry.UserEmail = userEmail.String
-		} else {
-			logEntry.UserEmail = "System" // For logs without a user (e.g., dropped emails)
-		}
-
-		// Parse headers JSON if present
-		if headersJSON != "" && headersJSON != "{}" {
-			var headers map[string]string
-			if err := json.Unmarshal([]byte(headersJSON), &headers); err != nil {
-				log.Printf("Error parsing headers JSON for log %d: %v", logEntry.ID, err)
-			} else {
-				logEntry.Headers = headers
-			}
-		}
-
-		data.Logs = append(data.Logs, logEntry)
-	}
-
-	if err = rows.Err(); err != nil {
-		log.Printf("Error after scanning rows: %v", err)
-		data.Error = "Error reading logs"
-	}
-
+	data.Logs = logs
 	s.tmpl.ExecuteTemplate(w, "layout.html", data)
 }
 
@@ -378,7 +254,7 @@ func (s *Server) handleHeaderRow(w http.ResponseWriter, r *http.Request) {
 // handleAPIMappings handles API requests for email mappings
 func (s *Server) handleAPIMappings(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context for all operations
-	userID := r.Context().Value(userIDKey).(int64)
+	userID := r.Context().Value(userIDKey).(uint)
 
 	// Validate CSRF token for all non-GET requests
 	if r.Method != "GET" {
@@ -470,12 +346,19 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		CurrentPage: "users",
 		UserRole:    r.Context().Value(userRoleKey).(string),
 		UserEmail:   r.Context().Value("userEmail").(string),
+		Token:       s.sessions.GenerateCSRFToken(),
 	}
 
 	if r.Method == "POST" {
+		// Validate CSRF token
+		token := r.FormValue("token")
+		if !s.sessions.ValidateCSRFToken(token) {
+			http.Error(w, "Invalid CSRF token", http.StatusForbidden)
+			return
+		}
+
 		if err := r.ParseForm(); err != nil {
-			data.Error = "Failed to parse form"
-			s.tmpl.ExecuteTemplate(w, "layout.html", data)
+			http.Error(w, "Failed to parse form", http.StatusBadRequest)
 			return
 		}
 
@@ -485,37 +368,39 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		user, err := s.db.CreateUser(email, role)
 		if err != nil {
 			data.Error = fmt.Sprintf("Failed to create user: %v", err)
-			s.tmpl.ExecuteTemplate(w, "layout.html", data)
-			return
+		} else {
+			// Check if we need to create a registration token
+			if user.PasswordHash == "" {
+				if s.emailer == nil {
+					data.Error = "Email sending is not configured. Please configure email sending or manually set password."
+				} else {
+					// Create registration token
+					regToken, err := s.db.CreateRegistrationToken(user.ID)
+					if err != nil {
+						data.Error = fmt.Sprintf("Failed to create registration token: %v", err)
+					} else {
+						// Send registration email
+						if err := s.emailer.SendRegistrationEmail(email, regToken.Token); err != nil {
+							log.Printf("Failed to send registration email: %v", err)
+							data.Error = fmt.Sprintf("User created but failed to send registration email: %v", err)
+						} else {
+							data.Success = fmt.Sprintf("User created successfully. Registration email sent to %s", email)
+						}
+					}
+				}
+			} else {
+				data.Success = fmt.Sprintf("User %s already exists", email)
+			}
 		}
-
-		// Create registration token
-		token, err := s.db.CreateRegistrationToken(user.ID)
-		if err != nil {
-			data.Error = fmt.Sprintf("Failed to create registration token: %v", err)
-			s.tmpl.ExecuteTemplate(w, "layout.html", data)
-			return
-		}
-
-		// Send registration email
-		if err := s.emailer.SendRegistrationEmail(email, token.Token); err != nil {
-			log.Printf("Failed to send registration email: %v", err)
-			data.Error = fmt.Sprintf("User created but failed to send registration email: %v", err)
-			s.tmpl.ExecuteTemplate(w, "layout.html", data)
-			return
-		}
-
-		data.Success = fmt.Sprintf("User created successfully. Registration email sent to %s", email)
 	}
 
 	// Get all users
 	users, err := s.db.GetUsers()
 	if err != nil {
 		data.Error = fmt.Sprintf("Failed to fetch users: %v", err)
-		s.tmpl.ExecuteTemplate(w, "layout.html", data)
-		return
+	} else {
+		data.Users = users
 	}
-	data.Users = users
 
 	s.tmpl.ExecuteTemplate(w, "layout.html", data)
 }
@@ -595,23 +480,27 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 // handleChangePassword handles user password changes
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	// Get the target user ID - either from query param (if admin changing other user) or from context (if changing own)
-	var targetUserID int64
+	var targetUserID uint
+	var isAdminChangingOther bool
+
 	if userIDStr := r.URL.Query().Get("user_id"); userIDStr != "" {
 		// Admin changing another user's password
 		var err error
-		targetUserID, err = strconv.ParseInt(userIDStr, 10, 64)
+		parsed, err := strconv.ParseUint(userIDStr, 10, 32)
 		if err != nil {
 			http.Error(w, "Invalid user ID", http.StatusBadRequest)
 			return
 		}
+		targetUserID = uint(parsed)
 		// Verify admin role
 		if r.Context().Value(userRoleKey).(string) != "admin" {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		isAdminChangingOther = true
 	} else {
 		// User changing their own password
-		targetUserID = r.Context().Value(userIDKey).(int64)
+		targetUserID = r.Context().Value(userIDKey).(uint)
 	}
 
 	data := PasswordData{
@@ -619,6 +508,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		UserRole:    r.Context().Value(userRoleKey).(string),
 		CurrentPage: "change_password",
 		UserEmail:   r.Context().Value("userEmail").(string),
+		IsAdmin:     r.Context().Value(userRoleKey).(string) == "admin",
 	}
 
 	if r.Method == "GET" {
@@ -640,19 +530,22 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Always verify current password of the user making the change
-		currentUserID := r.Context().Value(userIDKey).(int64)
-		currentUser, err := s.db.GetUserByID(currentUserID)
-		if err != nil {
-			data.Error = "Failed to verify credentials"
-			s.tmpl.ExecuteTemplate(w, "change_password.html", data)
-			return
-		}
+		// Only verify current password if user is changing their own password
+		// or if a non-admin is trying to change a password
+		if !isAdminChangingOther {
+			currentUserID := r.Context().Value(userIDKey).(uint)
+			currentUser, err := s.db.GetUserByID(currentUserID)
+			if err != nil {
+				data.Error = "Failed to verify credentials"
+				s.tmpl.ExecuteTemplate(w, "change_password.html", data)
+				return
+			}
 
-		if err := bcrypt.CompareHashAndPassword([]byte(currentUser.PasswordHash), []byte(currentPassword)); err != nil {
-			data.Error = "Invalid current password"
-			s.tmpl.ExecuteTemplate(w, "change_password.html", data)
-			return
+			if err := bcrypt.CompareHashAndPassword([]byte(currentUser.PasswordHash), []byte(currentPassword)); err != nil {
+				data.Error = "Invalid current password"
+				s.tmpl.ExecuteTemplate(w, "change_password.html", data)
+				return
+			}
 		}
 
 		// Change target user's password
@@ -677,11 +570,12 @@ func (s *Server) handleUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
+	parsed, err := strconv.ParseUint(r.FormValue("user_id"), 10, 32)
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
+	userID := uint(parsed)
 
 	newRole := r.FormValue("role")
 	if err := s.db.UpdateUserRole(userID, newRole); err != nil {
@@ -700,11 +594,12 @@ func (s *Server) handleUserToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
+	parsed, err := strconv.ParseUint(r.FormValue("user_id"), 10, 32)
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
+	userID := uint(parsed)
 
 	isActive, err := s.db.ToggleUserStatus(userID)
 	if err != nil {

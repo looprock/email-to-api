@@ -43,61 +43,121 @@ A Go-based server application that receives incoming emails, processes them to e
 
 ## Configuration
 
-The application uses environment variables for configuration. Here are the key variables:
+The application uses [Viper](https://github.com/spf13/viper) for configuration management, supporting both YAML configuration files and environment variables. Configuration values are loaded in the following order (each item overrides the previous ones):
 
+1. Default values
+2. Configuration file
+3. Environment variables
+
+### Configuration File
+
+The application looks for a `config.yaml` file in the following locations:
+- Current directory (`./config.yaml`)
+- Home directory (`$HOME/.emailtoapi/config.yaml`)
+- System directory (`/etc/emailtoapi/config.yaml`)
+
+You can copy the provided `config.example.yaml` as a starting point:
 ```bash
-# Admin Server Configuration
-ADMIN_SERVER_PORT=8080    # Port for admin interface
-ADMIN_SERVER_HOST=localhost # Host for admin interface
-
-# Mail Server Configuration
-MAIL_SERVER_PORT=25       # Port for mail server
-MAIL_SERVER_HOST=localhost # Host for mail server
-EMAIL_RECEIVE_METHOD=smtp # Email receiving method (smtp/webhook)
-MAILREADER_SMTP_PORT=2525 # Port for SMTP server (use >1024 for non-root)
-MAILREADER_SMTP_HOST=localhost # Host for SMTP server
-
-# Common Configuration
-DB_PATH=./data/mailreader.db  # Shared database used by both servers
+cp config.example.yaml config.yaml
 ```
 
-You can set these variables in your environment or create a `.env` file.
+Example configuration file:
+```yaml
+# Database Configuration
+database:
+  driver: sqlite  # sqlite or postgres
+  # SQLite configuration
+  path: ./data/emailtoapi.db
+  # PostgreSQL configuration (when driver is postgres)
+  host: localhost
+  port: 5432
+  user: postgres
+  password: ""
+  name: emailtoapi
+  sslmode: disable
 
-### Database Sharing
+# Admin Server Configuration
+adminserver:
+  host: 0.0.0.0
+  port: 8080
 
-Both the mail server and admin server use the same SQLite database file specified by `DB_PATH`. This is by design as:
-- The mail server needs to read email-to-API mappings
-- The admin interface manages these mappings
-- Both servers contribute to and read from the same log entries
+# Mail Server Configuration
+mailserver:
+  host: 0.0.0.0
+  port: 25
+  domain: example.com  # Domain for generated email addresses
+  receivemethod: smtp  # smtp or webhook
+  maxemailsize: 10485760  # 10MB in bytes
+  maxretries: 10
+  retrydelay: 5
+  smtphost: 0.0.0.0
+  smtpport: 2525
 
-When deploying in a production environment:
-- Ensure both servers have proper read/write permissions to the database file
-- Consider using a more robust database system if high concurrency is needed
-- Make sure the database file is in a location accessible to both servers if deployed separately
+# Mailgun Configuration (optional)
+mailgun:
+  apikey: ""
+  domain: ""
+  fromaddress: ""
 
-## Environment Variables
+# Site Configuration
+site:
+  domain: example.com
+```
 
-Required:
-- `MAILREADER_DOMAIN` - Domain for generated email addresses
+### Environment Variables
 
-Optional:
-- `DB_PATH` - Path to SQLite database file (default: mailreader.db)
-- `MAILREADER_SMTP_HOST` - SMTP server host (default: 0.0.0.0)
-- `MAILREADER_SMTP_PORT` - SMTP server port (default: 25)
-- `MAILREADER_MAX_EMAIL_SIZE` - Maximum email size in bytes (default: 10MB)
-- `MAILREADER_MAX_RETRIES` - Maximum retry attempts for failed API calls (default: 10)
-- `MAILREADER_RETRY_DELAY` - Delay between retries in seconds (default: 5)
-- `MAILREADER_RECEIVE_METHOD` - Email receiving method: "smtp" or "api" (default: smtp)
-- `ADMIN_SERVER_HOST` - Admin interface host (default: 0.0.0.0)
-- `ADMIN_SERVER_PORT` - Admin interface port (default: 8080)
-- `MAIL_SERVER_HOST` - Mail processing service host (default: localhost)
-- `MAIL_SERVER_PORT` - Mail processing service port (default: 25)
+All configuration options can also be set via environment variables. The application uses the prefix `EMAILTOAPI_` and converts dots to underscores. For example:
 
-Mailgun Configuration (optional, required for sending registration emails):
-- `MAILGUN_API_KEY` - Your Mailgun API key
-- `MAILGUN_DOMAIN` - Your Mailgun domain (required if MAILGUN_API_KEY is set)
-- `MAILGUN_FROM_ADDRESS` - Sender email address (required if MAILGUN_API_KEY is set)
-- `SITE_DOMAIN` - Your site's domain (required if MAILGUN_API_KEY is set)
+```bash
+# Database Configuration
+EMAILTOAPI_DATABASE_DRIVER=postgres
+EMAILTOAPI_DATABASE_HOST=localhost
+EMAILTOAPI_DATABASE_PORT=5432
+EMAILTOAPI_DATABASE_USER=postgres
+EMAILTOAPI_DATABASE_PASSWORD=secret
+EMAILTOAPI_DATABASE_NAME=emailtoapi
+EMAILTOAPI_DATABASE_SSLMODE=disable
+
+# Admin Server Configuration
+EMAILTOAPI_ADMINSERVER_HOST=0.0.0.0
+EMAILTOAPI_ADMINSERVER_PORT=8080
+
+# Mail Server Configuration
+EMAILTOAPI_MAILSERVER_DOMAIN=example.com
+EMAILTOAPI_MAILSERVER_SMTPPORT=2525
+```
+
+### Legacy Environment Variables
+
+For backward compatibility, the following legacy environment variables are still supported:
+
+```bash
+# Database (old format)
+DB_DRIVER=sqlite
+DB_PATH=./data/mailreader.db
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=
+DB_NAME=emailtoapi
+DB_SSLMODE=disable
+
+# Mail Server (old format)
+MAILREADER_DOMAIN=example.com
+MAILREADER_SMTP_HOST=0.0.0.0
+MAILREADER_SMTP_PORT=2525
+MAILREADER_MAX_EMAIL_SIZE=10485760
+MAILREADER_MAX_RETRIES=10
+MAILREADER_RETRY_DELAY=5
+MAILREADER_RECEIVE_METHOD=smtp
+
+# Mailgun (old format)
+MAILGUN_API_KEY=
+MAILGUN_DOMAIN=
+MAILGUN_FROM_ADDRESS=
+```
+
+These legacy variables will be mapped to their new counterparts automatically, but it's recommended to use the new format for consistency.
 
 ## Usage
 
@@ -105,8 +165,16 @@ Mailgun Configuration (optional, required for sending registration emails):
 
 1. First, run the database migrations:
    ```bash
-   go run scripts/migrate.go
+   # The migrations will run automatically when starting either server
+   # You can also run them manually using the migrate command:
+   go run cmd/migrate/main.go
    ```
+
+   The migrations are idempotent and safe to run multiple times. They will:
+   - Create necessary database tables if they don't exist
+   - Apply any pending migrations in order
+   - Skip migrations that have already been applied
+   - Work with both SQLite and PostgreSQL databases
 
 2. **Create an initial admin user (if none exists):**
    ```bash

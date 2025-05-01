@@ -14,7 +14,7 @@ import (
 // Session represents a user session
 type Session struct {
 	Token     string
-	UserID    int64
+	UserID    uint
 	Role      string
 	ExpiresAt time.Time
 }
@@ -34,7 +34,7 @@ func NewSessionManager() *SessionManager {
 }
 
 // CreateSession creates a new session for a user
-func (sm *SessionManager) CreateSession(userID int64, role string) (string, error) {
+func (sm *SessionManager) CreateSession(userID uint, role string) (string, error) {
 	// Generate random token
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {

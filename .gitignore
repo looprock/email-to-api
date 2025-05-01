@@ -32,3 +32,6 @@ email.db
 example-api/data/*
 # Added by goreleaser init:
 dist/
+
+config.yaml
+notes.txt
