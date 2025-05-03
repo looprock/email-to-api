@@ -252,6 +252,10 @@ func (p *Processor) processAsync(email Email) error {
 		tags = []string{"untagged"}
 		log.Printf("No tags found in subject, using default tag: %q", tags[0])
 	} else {
+		// Convert tags to lowercase
+		for i, tag := range tags {
+			tags[i] = strings.ToLower(tag)
+		}
 		log.Printf("Extracted %d tags from subject: %v", len(tags), tags)
 	}
 
