@@ -131,6 +131,9 @@ type EmailData struct {
 
 	// All headers
 	Headers map[string][]string `json:"headers,omitempty"`
+
+	// Tags extracted from subject (lowercased)
+	Tags []string `json:"tags"`
 }
 
 // ProcessedData represents the JSON payload to be sent to the API
@@ -290,6 +293,9 @@ func (p *Processor) processAsync(email Email) error {
 
 		// All headers
 		Headers: email.Headers,
+
+		// Tags
+		Tags: tags,
 	}
 
 	processedEmail := ProcessedData{
