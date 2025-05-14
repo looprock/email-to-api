@@ -26,11 +26,13 @@ A Go-based server application that receives incoming emails, processes them to e
 3. Run `go mod download` to install dependencies
 4. Run database migrations:
    ```bash
-   go run scripts/migrate.go
+   go run scripts/migrate/migrate.go
    ```
 5. **Create an initial admin user (if none exists):**
    ```bash
-   go run scripts/create_admin.go -email=admin@example.com -password=yourpassword
+   # There's a hash utility to create password hashes for manual insertion
+   go run scripts/hash/hash.go -password=yourpassword
+   # Use the generated hash to create an admin user in the database
    ```
 6. Start both servers (in separate terminals):
    ```bash
@@ -83,25 +85,20 @@ adminserver:
 
 # Mail Server Configuration
 mailserver:
-  host: 0.0.0.0
-  port: 25
   domain: example.com  # Domain for generated email addresses
   receivemethod: smtp  # smtp or webhook
   maxemailsize: 10485760  # 10MB in bytes
   maxretries: 10
   retrydelay: 5
   smtphost: 0.0.0.0
-  smtpport: 2525
+  smtpport: 25
 
 # Mailgun Configuration (optional)
 mailgun:
   apikey: ""
   domain: ""
   fromaddress: ""
-
-# Site Configuration
-site:
-  domain: example.com
+  site_domain: example.com # Domain for registration link if mailgun is used
 ```
 
 ### Environment Variables
@@ -167,7 +164,7 @@ These legacy variables will be mapped to their new counterparts automatically, b
    ```bash
    # The migrations will run automatically when starting either server
    # You can also run them manually using the migrate command:
-   go run cmd/migrate/main.go
+   go run scripts/migrate/migrate.go
    ```
 
    The migrations are idempotent and safe to run multiple times. They will:
@@ -178,9 +175,11 @@ These legacy variables will be mapped to their new counterparts automatically, b
 
 2. **Create an initial admin user (if none exists):**
    ```bash
-   go run scripts/create_admin.go -email=admin@example.com -password=yourpassword
+   # Create a password hash first
+   go run scripts/hash/hash.go -password=yourpassword
+   # Then use the hash to manually create an admin user in the database
+   # or use the registration page to create a user, then update their role in the database
    ```
-   - This will create an admin user with the specified email and password.
    - You can create additional admin or regular users from the web interface after logging in.
 
 3. Start the mail server:
@@ -188,8 +187,8 @@ These legacy variables will be mapped to their new counterparts automatically, b
    go run cmd/mailserver/main.go
    ```
    This will start:
-   - SMTP server on `MAILREADER_SMTP_HOST:MAILREADER_SMTP_PORT`
-   - Mail processing service on `MAIL_SERVER_HOST:MAIL_SERVER_PORT`
+   - SMTP server on the configured `smtphost:smtpport`
+   - Mail processing service
 
 4. Start the admin server (in a separate terminal):
    ```bash
@@ -229,7 +228,7 @@ The logs section shows:
 
 Configure your email client to use:
 - SMTP server: localhost (or your server address)
-- Port: 2525 (or your configured SMTP_PORT)
+- Port: 25 (or your configured smtpport)
 - No authentication required for testing
 
 The server will:
@@ -250,7 +249,8 @@ The server will:
 .
 ├── cmd/                    # Application entry points
 │   ├── mailserver/        # Mail server application
-│   └── adminserver/       # Admin server application
+│   ├── adminserver/       # Admin server application
+│   └── server/            # Combined server application
 ├── internal/              # Private application code
 │   ├── admin/            # Admin interface
 │   ├── config/           # Configuration handling
@@ -260,6 +260,8 @@ The server will:
 ├── pkg/                   # Public libraries
 ├── migrations/            # Database migrations
 └── scripts/              # Utility scripts
+    ├── migrate/          # Database migration script
+    └── hash/             # Password hashing utility
 ```
 
 ## Security Notes
