@@ -273,25 +273,38 @@ func (db *DB) UpdateEmailMapping(emailAddress string, endpointURL string, header
 
 // DeleteEmailMapping permanently deletes an email mapping and its associated logs
 func (db *DB) DeleteEmailMapping(emailAddress string, userID uint) error {
+	log.Printf("Attempting to delete email mapping for %s (userID: %d)", emailAddress, userID)
+	
 	// First, find the mapping to get its ID
 	var mapping EmailMapping
 	if err := db.Where("generated_email = ? AND user_id = ?", emailAddress, userID).First(&mapping).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("No mapping found for email: %s (userID: %d)", emailAddress, userID)
 			return fmt.Errorf("no mapping found for email: %s", emailAddress)
 		}
+		log.Printf("Error finding email mapping: %v", err)
 		return fmt.Errorf("failed to find email mapping: %w", err)
 	}
+	
+	log.Printf("Found mapping ID %d for email %s (userID: %d)", mapping.ID, emailAddress, userID)
 
-	// Use a transaction to ensure all related records are deleted
+	// Execute the deletion using raw SQL to directly handle foreign key constraints
+	// Use transaction for consistency
 	return db.Transaction(func(tx *gorm.DB) error {
-		// First delete associated logs
-		if err := tx.Where("mapping_id = ?", mapping.ID).Delete(&EmailLog{}).Error; err != nil {
-			return fmt.Errorf("failed to delete associated email logs: %w", err)
+		// Use raw SQL to delete logs first
+		if result := tx.Exec("DELETE FROM email_logs WHERE mapping_id = ?", mapping.ID); result.Error != nil {
+			log.Printf("Error deleting logs with SQL: %v", result.Error)
+			return fmt.Errorf("failed to delete associated email logs: %w", result.Error)
+		} else {
+			log.Printf("Deleted %d log entries for mapping ID %d", result.RowsAffected, mapping.ID)
 		}
 
-		// Then delete the mapping
-		if err := tx.Delete(&mapping).Error; err != nil {
-			return fmt.Errorf("failed to delete email mapping: %w", err)
+		// Then delete the mapping with raw SQL
+		if result := tx.Exec("DELETE FROM email_mappings WHERE id = ?", mapping.ID); result.Error != nil {
+			log.Printf("Error deleting mapping with SQL: %v", result.Error)
+			return fmt.Errorf("failed to delete email mapping: %w", result.Error)
+		} else {
+			log.Printf("Successfully deleted mapping ID %d for email %s", mapping.ID, emailAddress)
 		}
 
 		return nil
