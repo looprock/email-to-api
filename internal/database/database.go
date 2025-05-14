@@ -271,19 +271,31 @@ func (db *DB) UpdateEmailMapping(emailAddress string, endpointURL string, header
 	return nil
 }
 
-// DeleteEmailMapping permanently deletes an email mapping
+// DeleteEmailMapping permanently deletes an email mapping and its associated logs
 func (db *DB) DeleteEmailMapping(emailAddress string, userID uint) error {
-	result := db.Where("generated_email = ? AND user_id = ?", emailAddress, userID).Delete(&EmailMapping{})
-
-	if result.Error != nil {
-		return fmt.Errorf("failed to delete email mapping: %w", result.Error)
+	// First, find the mapping to get its ID
+	var mapping EmailMapping
+	if err := db.Where("generated_email = ? AND user_id = ?", emailAddress, userID).First(&mapping).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("no mapping found for email: %s", emailAddress)
+		}
+		return fmt.Errorf("failed to find email mapping: %w", err)
 	}
 
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("no mapping found for email: %s", emailAddress)
-	}
+	// Use a transaction to ensure all related records are deleted
+	return db.Transaction(func(tx *gorm.DB) error {
+		// First delete associated logs
+		if err := tx.Where("mapping_id = ?", mapping.ID).Delete(&EmailLog{}).Error; err != nil {
+			return fmt.Errorf("failed to delete associated email logs: %w", err)
+		}
 
-	return nil
+		// Then delete the mapping
+		if err := tx.Delete(&mapping).Error; err != nil {
+			return fmt.Errorf("failed to delete email mapping: %w", err)
+		}
+
+		return nil
+	})
 }
 
 // ToggleEmailMapping toggles whether an email mapping is active
