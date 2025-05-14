@@ -156,6 +156,7 @@ func (s *Server) Start(addr string) error {
 	mux.HandleFunc("/logs", s.RequireAuth(s.handleLogs))
 	mux.HandleFunc("/users", s.RequireAuth(s.RequireAdmin(s.handleUsers)))
 	mux.HandleFunc("/api/mappings", s.RequireAuth(s.handleAPIMappings))
+	mux.HandleFunc("/api/mappings/delete", s.RequireAuth(s.handleDeleteMapping))
 
 	// New HTMX routes
 	mux.HandleFunc("/admin/mappings/add-form", s.RequireAuth(s.handleAddMappingForm))
@@ -322,19 +323,13 @@ func (s *Server) handleAPIMappings(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 
 	case "DELETE":
-		emailAddress := r.URL.Query().Get("email")
-		if emailAddress == "" {
-			http.Error(w, "Email address required", http.StatusBadRequest)
-			return
-		}
-
-		if err := s.db.DeleteEmailMapping(emailAddress, userID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Redirect back to mappings page
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		// Forward to dedicated delete handler that handles admin privileges
+		token := r.URL.Query().Get("token")
+		email := r.URL.Query().Get("email")
+	
+		// Redirect to new delete handler
+		http.Redirect(w, r, fmt.Sprintf("/api/mappings/delete?email=%s&token=%s", email, token), http.StatusSeeOther)
+		return
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
