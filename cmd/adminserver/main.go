@@ -24,8 +24,6 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	log.Printf("[INFO] Admin server using database: %s", cfg.Database.Path)
-
 	// Initialize database
 	dbConfig := &database.Config{
 		Driver:     cfg.Database.Driver,
@@ -37,6 +35,10 @@ func main() {
 		dbConfig.DSN = fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s",
 			cfg.Database.Host, cfg.Database.Port, cfg.Database.User,
 			cfg.Database.Name, cfg.Database.Password, cfg.Database.SSLMode)
+		log.Printf("[INFO] Admin server using PostgreSQL database: %s@%s:%d/%s", 
+			cfg.Database.User, cfg.Database.Host, cfg.Database.Port, cfg.Database.Name)
+	} else {
+		log.Printf("[INFO] Admin server using SQLite database: %s", cfg.Database.Path)
 	}
 
 	db, err := database.New(dbConfig)
